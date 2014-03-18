@@ -8,7 +8,7 @@ namespace AP_XmlStrategy\View\Model;
 
 use Zend\View\Model\ViewModel;
 use Zend\Stdlib\ArrayUtils;
-use AP_XmlStrategy\Xml\Array2XML;
+use AP_XmlStrategy\Xml\Xml;
 
 /**
  * @category   Zend
@@ -103,19 +103,47 @@ class XmlModel extends ViewModel
         return $this->rootNode;
     }
 
-
+    /**
+     * Override serialize()
+     *
+     * Tests for the special top-level variable "payload", set by ZF\Rest\RestController.
+     *
+     * If discovered, the value is pulled and used as the variables to serialize.
+     *
+     * A further check is done to see if we have a ZF\Hal\Entity or
+     * ZF\Hal\Collection, and, if so, we pull the top-level entity or
+     * collection and serialize that.
+     *
+     * @return string
+     */
     public function serialize()
     {
         $variables = $this->getVariables();
-        
-        if (is_a($variables, 'Traversable')) {
+
+        // 'payload' == ZF\Rest\RestController payload
+        if (isset($variables['payload'])) {
+            $variables = $variables['payload'];
+        }
+
+        // Use ZF\Hal\Entity's composed entity
+        if ($variables instanceof \ZF\Hal\Entity) {
+            $variables = $variables->entity;
+        }
+
+        // Use ZF\Hal\Collection's composed collection
+        if ($variables instanceof \ZF\Hal\Collection) {
+            $variables = $variables->getCollection();
+        }
+
+        if (method_exists($variables, 'getArrayCopy')) {
+            $variables = $variables->getArrayCopy();
+        }
+
+        if ($variables instanceof \Traversable) {
             $variables = ArrayUtils::iteratorToArray($variables);
         }
-        
-        Array2XML::init($this->version, $this->encoding);
 
-        $xml = Array2XML::createXML($this->rootNode, $variables);
-
-        return $xml->saveXML();
+        $xml = new Xml();
+        return $xml->serialize($variables, 'root');
     }
 }
